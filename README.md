@@ -34,7 +34,7 @@ Node 2 存在的意义在于 我对区块链不熟悉 经常做一些不可挽�
  + [x] WebSocket
  + [x] IPC
 * 账户
- + [x] 通过密钥、随机值创建账户
+ + [x] 通过密钥、随机值创建账户 [示例](https://github.com/poppyz/ETH-Core/blob/master/Doc/Key2Pubkey2Address.md)
  + [x] 支持多线程大批量创建(百万级以上)
  + [x] 上传到Mongodb 保存
 * 交易
