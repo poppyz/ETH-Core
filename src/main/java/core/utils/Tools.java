@@ -26,6 +26,7 @@ import static com.mongodb.client.model.Filters.eq;
 
 public class Tools {
 
+    //Block to Document
     public static Document block2Doc(EthBlock.Block block) {
         Document doc = new Document();
         doc.append("number", block.getNumber().longValue());
@@ -61,6 +62,7 @@ public class Tools {
     }
 
 
+    //Transaction to Document
     public static Document transaction2Doc(Transaction tx) {
 
         Document doc = new Document();
@@ -85,6 +87,7 @@ public class Tools {
         return doc;
     }
 
+    //Document to Transaction
     public static Transaction transaction2Doc(Document doc) {
         Transaction tx = new Transaction(doc.getString("hash"), Long.toHexString(doc.getLong("nonce")), doc.getString("blockHash"),
                 Long.toHexString(doc.getLong("blockNumber")), Long.toHexString(doc.getLong("transactionIndex")),
@@ -94,7 +97,7 @@ public class Tools {
         return tx;
     }
 
-
+    //创建钱包
     public static WalletFile createWallet(String pwd, boolean useFullScrypt) throws Exception {
         ECKeyPair ecKeyPair = Keys.createEcKeyPair();
         WalletFile walletFile = null;
@@ -106,7 +109,7 @@ public class Tools {
         return walletFile;
     }
 
-
+    //使用使用数据流作为缓存 批量生成钱包文件
     public static boolean createWallets(long count, String pwd, boolean useFullScrypt, BufferedWriter walletFilesLocal, AtomicLong success, AtomicLong status) throws Exception {
         createWallet(pwd, useFullScrypt);
         ArrayList<WalletFile> walletFilesTemp = new ArrayList<>();
@@ -140,7 +143,7 @@ public class Tools {
         return true;
     }
 
-
+    //使用多线程方式批量生成钱包文件
     public static void createWalletByThread(ExecutorService threadPools, String pwd, boolean useFullScrypt, long number, BufferedWriter walletFilesLocal) throws Exception {
         int threads = (int) (Runtime.getRuntime().availableProcessors() * 1.2);
         AtomicLong success = new AtomicLong();
@@ -205,6 +208,7 @@ public class Tools {
         }
     }
 
+    //检查Mongodb中保存的最新的块中的交易是否完整存在于数据库  意外关机会导致数据不同步
     public static boolean check(Document lastblock, MongoCollection<Document> transactionsDoc) {
         Set<String> txs = new HashSet<String>((List<String>) lastblock.get("transactions"));
         int raw_len = txs.size();
@@ -218,6 +222,7 @@ public class Tools {
         return true;
     }
 
+    //使用Java 的算法库生成密钥对
     static KeyPair createSecp256k1KeyPair(SecureRandom random) throws NoSuchProviderException, NoSuchAlgorithmException, InvalidAlgorithmParameterException {
         if (Security.getProvider("BC") == null) {
             Security.addProvider(new BouncyCastleProvider());
@@ -229,7 +234,6 @@ public class Tools {
         } else {
             keyPairGenerator.initialize(ecGenParameterSpec);
         }
-
         return keyPairGenerator.generateKeyPair();
     }
 }

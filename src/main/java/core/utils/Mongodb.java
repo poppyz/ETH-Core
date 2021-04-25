@@ -41,15 +41,16 @@ public class Mongodb {
         mongoClient = new MongoClient(address, mongoCredential, options);
     }
 
-    public long getMaxBlock(String collectionName) {
+    //获取某个集合中 某个字段最大的值
+    public long getMax(String collectionName,String indexName) {
         MongoCollection<Document> collection = getCollection(collectionName);
         long number = 0;
         BasicDBObject dbObject = new BasicDBObject();
-        dbObject.put("number", -1);
+        dbObject.put(indexName, -1);
         MongoCursor<Document> mongoCursor = collection.find().sort(dbObject).limit(1).iterator();
         if (mongoCursor.hasNext()) {
             Document doc = mongoCursor.next();
-            number = doc.getLong("number");
+            number = doc.getLong(indexName);
         }
         return number;
     }

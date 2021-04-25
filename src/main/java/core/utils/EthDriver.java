@@ -5,7 +5,6 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Projections;
-import core.utils.Tools;
 import org.bson.Document;
 import org.json.JSONObject;
 import org.reactivestreams.Subscription;
@@ -86,10 +85,9 @@ public class EthDriver {
         ObjectMapper objectMapper = new ObjectMapper();
         WalletFile walletFile = objectMapper.readValue(ethConfig.getJSONObject("Rich").getJSONObject("wallet").toString(), WalletFile.class);
         rich = Credentials.create(Wallet.decrypt(ethConfig.getJSONObject("Rich").getString("pwd"), walletFile));
-
-
     }
 
+    // 从Mongodb中获取预设的2,000,000个地址
     public void getAddress(MongoCollection<Document> collection) {
         MongoCursor<Document> mongoCursor = collection.find().projection(Projections.excludeId()).batchSize(500).iterator();
         while (mongoCursor.hasNext()) {
@@ -100,40 +98,24 @@ public class EthDriver {
         log.info(String.format("Get %d walletfile from Mongodb", address.size()));
     }
 
+    //从block中获取交易数组
     public List<Transaction> getTransactionFromBlock(EthBlock.Block block) {
         List<Transaction> result = block.getTransactions().stream().map(tx -> ((EthBlock.TransactionObject) tx.get()).get()).collect(Collectors.toList());
         return result;
     }
-//    public void getPendingTx()
-//    {
-//        Subscription subscription = (Subscription) web3j.pendingTransactionFlowable().subscribe(tx -> {
-//            log.info(tx.getHash());
-//        });
-//
-//        List<Transaction> result =  block.getTransactions().stream().map(tx -> ((EthBlock.TransactionObject) tx.get()).get()).collect(Collectors.toList());
-//        List<String > txs =  web3j.ethPendingTransactionHashFlowable()
-//                .flatMap(
-//                        transactionHash -> transactionHash
-//                                ).collect(Collectors.toList());
-////                .filter(ethTransaction -> ethTransaction.getTransaction().isPresent())
-////                .map(ethTransaction -> ethTransaction.getTransaction().get());
-//
-//        web3j.ethPendingTransactionHashFlowable().flatMap()
-//    }
 
+    //从节点按照区块高度获取区块
     public EthBlock.Block getBlockByNumber(long number) throws IOException {
         return web3j.ethGetBlockByNumber(DefaultBlockParameter.valueOf(BigInteger.valueOf(number)), true).send().getBlock();
     }
 
+    //从节点中按照地址获取该地址的余额
     public BigInteger get_balance(String address) throws IOException {
         EthGetBalance ethGetBalance = web3j.ethGetBalance(address, DefaultBlockParameter.valueOf("latest")).send();
         return ethGetBalance.getBalance();
     }
 
-    private byte[] signedMessage(Credentials from, RawTransaction rawTransaction) {
-        return TransactionEncoder.signMessage(rawTransaction, from);
-    }
-
+    //从节点获取该地址的Nonce  仅为已打包的nonce + 1 并不包括未确认交易
     private BigInteger getNonce(String address) throws Exception {
         EthGetTransactionCount ethGetTransactionCount =
                 web3j.ethGetTransactionCount(address, DefaultBlockParameter.valueOf("latest"))
@@ -142,19 +124,19 @@ public class EthDriver {
         return ethGetTransactionCount.getTransactionCount();
     }
 
+    //对RAW交易进行签名
+    private byte[] signedMessage(Credentials from, RawTransaction rawTransaction) {
+        return TransactionEncoder.signMessage(rawTransaction, from);
+    }
+
+    //创建未签名的RAW交易
     private RawTransaction
     createEtherTransaction(String fromAddress, String toAddress, BigInteger value, BigInteger nonce) throws Exception {
         RawTransaction rawTransaction = RawTransaction.createEtherTransaction(nonce, BigInteger.valueOf(10_000_000_000L), BigInteger.valueOf(21_000), toAddress, value);
         return rawTransaction;
     }
 
-    public String sendTransaction(Credentials from, String toAddress, long amount) throws Exception {
-        BigInteger nonce = this.getNonce(from.getAddress());
-        RawTransaction rawTransaction = createEtherTransaction(from.getAddress(), toAddress, BigInteger.valueOf(amount), nonce);
-        String hash = send(signedMessage(from, rawTransaction));
-        return hash;
-    }
-
+    //发送已签名的交易
     private String send(byte[] signedMessage) throws ExecutionException, InterruptedException, IOException {
         try {
             String hash = Numeric.toHexString(Hash.sha3(signedMessage));
@@ -168,6 +150,15 @@ public class EthDriver {
         }
     }
 
+    //创建 并 发送交易
+    public String sendTransaction(Credentials from, String toAddress, long amount) throws Exception {
+        BigInteger nonce = this.getNonce(from.getAddress());
+        RawTransaction rawTransaction = createEtherTransaction(from.getAddress(), toAddress, BigInteger.valueOf(amount), nonce);
+        String hash = send(signedMessage(from, rawTransaction));
+        return hash;
+    }
+
+    //测试数据库完整性的函数，用来检查数据库中的Block 和 交易一一对应的.防止上传交易时遗漏
     public boolean checkAll(MongoCollection<Document> blockInfo, MongoCollection<Document> txDoc) {
         MongoCursor<Document> mongoCursor = blockInfo.find().iterator();
         while (mongoCursor.hasNext()) {
@@ -185,6 +176,7 @@ public class EthDriver {
         return true;
     }
 
+    //批量创建Web3j连接,用来多线程时并发
     protected ArrayList<Web3j> createmuchclient(int count, String path) throws ConnectException {
 
         ArrayList<Web3j> web3js = new ArrayList<>();
@@ -196,6 +188,7 @@ public class EthDriver {
         return web3js;
     }
 
+    //随机自动按照一定速率发送交易 用来模拟真实ETH网络
     public void randomSendTx(MongoCollection<Document> walletFileDoc) {
         {
             //每秒自动随机发送 10 笔交易
@@ -234,8 +227,9 @@ public class EthDriver {
         }
     }
 
+    //从节点订阅区块并获取交易信息 上传至Mongodb
     public void TxintoDb(int start, MongoCollection<Document> transactionsCollection, MongoCollection<Document> blockCollection) {
-        Subscription subscription1 = (Subscription) web3j.replayPastAndFutureBlocksFlowable(new DefaultBlockParameterNumber(start), true).subscribe(block -> {
+        Subscription subscription = (Subscription) web3j.replayPastAndFutureBlocksFlowable(new DefaultBlockParameterNumber(start), true).subscribe(block -> {
 
             Document blockDoc = Tools.block2Doc(block.getBlock());
             blockCollection.insertOne(blockDoc);
@@ -244,13 +238,36 @@ public class EthDriver {
                     {
                         txs.add(Tools.transaction2Doc(((EthBlock.TransactionObject) tx.get())));
                     }
-
             );
             if (!txs.isEmpty()) {
                 transactionsCollection.insertMany(txs);
             }
         });
-//        subscription1.request(10);
+        this.subscriptionHashMap.put("TxintoDb",subscription);
+    }
+
+    //从节点订阅未确认的交易
+    public void getPendingTx() {
+        Subscription subscription = (Subscription) web3j.pendingTransactionFlowable().subscribe(tx -> {
+            log.info(tx.getHash());
+        });
+        this.subscriptionHashMap.put("getPendingTx",subscription);
+    }
+
+    //获取订阅
+    public Subscription getSubscription(String name)
+    {
+        return this.subscriptionHashMap.get(name);
+    }
+
+    //移除订阅
+    public void delSubscription(String name)
+    {
+        if (this.subscriptionHashMap.get(name) != null)
+        {
+            this.subscriptionHashMap.get(name).cancel();
+            this.subscriptionHashMap.remove(name);
+        }
     }
 
 

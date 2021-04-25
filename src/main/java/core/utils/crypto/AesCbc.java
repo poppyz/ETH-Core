@@ -1,9 +1,6 @@
 package core.utils.crypto;
 
-import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
+import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
@@ -31,7 +28,6 @@ class AesCiper {
         this.cipher = Cipher.getInstance("AES/CBC/PKCS5Padding");
         this.cryptMode = mode;
         this.cipher.init(this.cryptMode ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, this.skeySpec, this.ips);
-
     }
 
     public AesCiper(AesCiper aesCiper)
@@ -70,33 +66,39 @@ class AesCiper {
             this.cipher.init(this.cryptMode ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, this.skeySpec, this.ips);
         }
     }
+
     public String getName() {
         return String.format("Algorithm AES %d bit Mode %s", this.skeySpec.getEncoded().length * 8, this.cryptMode ? "ENCRYPT_MODE" : "DECRYPT_MODE");
     }
-    public byte[] getIv()
-    {
-        return this.cipher.getIV();
-    }
-    public byte[] calculate(byte[] raw) throws IllegalBlockSizeException, BadPaddingException {
-        byte[] data = this.cipher.doFinal(raw);
-        this.ips = new IvParameterSpec(this.cipher.getIV());
-        return data;
-    }
+
     public byte[] start() throws IllegalBlockSizeException, BadPaddingException {
         byte[] data = this.cipher.doFinal();
-        return this.cipher.getIV();
+        //加密前返回IV
+        if(this.cryptMode)
+        {
+            return this.cipher.getIV();
+        }
+        return null;
     }
-    public byte[] update(byte[] raw)
+    public byte[] update(byte[] raw,int len)
     {
-        byte[] data = this.cipher.update(raw);
+        byte[] data = this.cipher.update(raw,0,len);
         return data;
     }
-    public byte[] doFinal(byte[] raw) throws IllegalBlockSizeException, BadPaddingException {
-        byte[] data = this.cipher.doFinal(raw);
-        return data;
+    public byte[] doFinal(byte[] raw,int len) throws IllegalBlockSizeException, BadPaddingException, ShortBufferException {
+        if(raw == null)
+        {
+            byte[] data = this.cipher.doFinal();
+            return null;
+        }
+        else
+        {
+            byte[] cc= new byte[len];
+            System.arraycopy(raw,0,cc,0,len);
+            byte[] data = this.cipher.doFinal(cc);
+            return data;
+        }
     }
-
-
 }
 
 
@@ -134,7 +136,7 @@ public class AesCbc {
     private AesCiper decryptAesCiper;
     private static final int DEFAULT_BLOCK_SIZE = 15 * 1024;
 
-    public AesCbc(byte[] key) {
+    public AesCbc() {
 
     }
     public void build(byte[] key, byte[] encryptIv,byte[] decryptIv) throws InvalidAlgorithmParameterException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidKeyException {
@@ -149,57 +151,32 @@ public class AesCbc {
     }
 
 
-    public void crypto(InputStream inputStream,OutputStream outputStream,boolean mode) throws IOException, IllegalBlockSizeException, BadPaddingException {
+    public void decrypt(InputStream inputStream,OutputStream outputStream) throws IOException, IllegalBlockSizeException, BadPaddingException, InvalidAlgorithmParameterException, InvalidKeyException, ShortBufferException {
         byte[] buffer = new byte[DEFAULT_BLOCK_SIZE];
-        int len = inputStream.read(buffer,0,DEFAULT_BLOCK_SIZE);
-        AesCiper ciper = mode?this.encryptAesCiper:this.decryptAesCiper;
-        outputStream.write(ciper.start(),0,16);
+        AesCiper ciper = this.decryptAesCiper;
+        byte[] iv = new byte[16];
+        inputStream.read(iv);
+        ciper.setIv(iv);
         int n;
         while ((n = inputStream.read(buffer)) != -1) {
-            byte[] data = ciper.update(buffer);
+            byte[] data = null;
+            data = n == DEFAULT_BLOCK_SIZE ? ciper.update(buffer,n) : ciper.doFinal(buffer,n);
             outputStream.write(data);
         }
         outputStream.flush();
     }
 
-//
-//
-//
-//    public boolean decrypt(InputStream in, OutputStream out) throws IOException {
-//
-//        this.
-//        out.write();
-//
-//        return false;
-//    }
-//    public byte[] decrypt(byte[] data)
-//    {
-//        int outSize = data.length%16==0?(data.length/16): (data.length/16+1);
-//        byte[] out = new byte[outSize];
-//
-//        synchronized (this.decryptAesCiper)
-//        {
-//            System.arraycopy(this.decryptAesCiper.getIv(), 0, out, 0, 16);
-//            try
-//            {
-//                byte[] temp = this.decryptAesCiper.calculate(data);
-//                System.arraycopy(temp ,0,out,16,temp.length);
-//                return out;
-//            } catch (IllegalBlockSizeException | BadPaddingException  e) {
-//                throw new RuntimeException("AES encrypt exception");
-//            }
-//        }
-//    }
-//    public byte[] encrypt(byte[] data)
-//    {
-//        synchronized (this.encryptAesCiper)
-//        {
-//            try
-//            {
-//                return this.encryptAesCiper.calculate(data);
-//            } catch (IllegalBlockSizeException | BadPaddingException  e) {
-//                throw new RuntimeException("AES encrypt exception");
-//            }
-//        }
-//    }
+    public void encrypt(InputStream inputStream,OutputStream outputStream) throws IOException, IllegalBlockSizeException, BadPaddingException, ShortBufferException {
+        byte[] buffer = new byte[DEFAULT_BLOCK_SIZE];
+        AesCiper ciper = this.encryptAesCiper;
+        outputStream.write(ciper.start(),0,16);
+        long total = 0 ;
+        int n;
+        while ((n = inputStream.read(buffer)) != -1) {
+            byte[] data = null;
+            data = n == DEFAULT_BLOCK_SIZE ? ciper.update(buffer,n) : ciper.doFinal(buffer,n);
+            outputStream.write(data);
+        }
+        outputStream.flush();
+    }
 }
