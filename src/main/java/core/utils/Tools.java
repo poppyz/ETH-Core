@@ -3,6 +3,7 @@ package core.utils;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoCursor;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bson.Document;
 import org.web3j.crypto.ECKeyPair;
 import org.web3j.crypto.Keys;
@@ -12,6 +13,8 @@ import org.web3j.protocol.core.methods.response.EthBlock;
 import org.web3j.protocol.core.methods.response.Transaction;
 
 import java.io.BufferedWriter;
+import java.security.*;
+import java.security.spec.ECGenParameterSpec;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -213,5 +216,20 @@ public class Tools {
             }
         }
         return true;
+    }
+
+    static KeyPair createSecp256k1KeyPair(SecureRandom random) throws NoSuchProviderException, NoSuchAlgorithmException, InvalidAlgorithmParameterException {
+        if (Security.getProvider("BC") == null) {
+            Security.addProvider(new BouncyCastleProvider());
+        }
+        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("ECDSA", "BC");
+        ECGenParameterSpec ecGenParameterSpec = new ECGenParameterSpec("secp256k1");
+        if (random != null) {
+            keyPairGenerator.initialize(ecGenParameterSpec, random);
+        } else {
+            keyPairGenerator.initialize(ecGenParameterSpec);
+        }
+
+        return keyPairGenerator.generateKeyPair();
     }
 }

@@ -1,0 +1,20 @@
+## Mongodb
+[参考](https://www.runoob.com/docker/docker-install-mongodb.html)
+
+## 创建命令
+```
+docker pull mongo:latest        // 获取Mongodb image
+docker run -itd --name mongodb -p 27017:27017 mongo --auth  //创建
+docker exec -it mongodb mongo admin
+db.createUser({ user:'admin',pwd:'xxxxxx',roles:[ { role:'userAdminAnyDatabase', db: 'admin'},"readWriteAnyDatabase"]});
+db.auth('admin', 'xxxxxx')
+```
+
+## 创建索引
+```
+db.Transactions.createIndex({"hash":1},{unique:true})  //对交易hash创建唯一索引
+db.Transactions.createIndex({"from":1},{unique:false})  //对交易发送方创建非唯一索引
+db.Transactions.createIndex({"to":1},{unique:false})  //对交易接收方创建非唯一索引
+db.blockInfo.createIndex({"hash":1},{unique:true})  //对区块hash创建唯一索引
+db.blockInfo.createIndex({"number":1},{unique:true})  //对区块高度创建唯一索引
+```
