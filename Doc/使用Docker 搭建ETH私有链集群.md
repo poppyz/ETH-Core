@@ -97,6 +97,12 @@ trusted-nodes.json
 ]
 
 ```
+eth 节点文件
+
+![EthPic](https://github.com/poppyz/ETH-Core/blob/master/Doc/Image/NodeFile.png)
+
+eth 本地节点docker
+![DockerPic](https://github.com/poppyz/ETH-Core/blob/master/Doc/Image/Docker.png)
 
 ### 存在问题
 * 当手动 docker stop nodeX 之后再次start 或者 直接docker restart nodeX时候 节点信息会出现 高度为0且无法同步的现象 暂未解决 我认为是我启动脚本写的有问题导致了多次init 了。但我改了脚本还是这个问题。
